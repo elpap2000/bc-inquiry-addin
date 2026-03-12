@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BC Inquiry Checker</title>
+
+  <!-- Office.js – required for all Outlook add-ins -->
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js" type="text/javascript"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+      background: #f3f6fb;
+      color: #1e293b;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      background: #0066CC;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-logo {
+      width: 30px; height: 30px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-weight: 800; font-size: 12px; letter-spacing: -0.5px;
+    }
+    .header-text .title { color: #fff; font-weight: 700; font-size: 13px; }
+    .header-text .sub   { color: rgba(255,255,255,0.65); font-size: 10px; }
+
+    /* ── SECTIONS ── */
+    .panel { padding: 14px; }
+
+    .detected-box {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+    .detected-label {
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: #3b82f6; margin-bottom: 4px;
+    }
+    .detected-ref {
+      font-family: 'Cascadia Code', 'Courier New', monospace;
+      font-size: 20px; font-weight: 700;
+      color: #1e40af; letter-spacing: 0.04em;
+    }
+    .detected-source { font-size: 10px; color: #64748b; margin-top: 2px; }
+
+    /* ── SEARCH BAR ── */
+    .search-row {
+      display: flex; gap: 6px; margin-bottom: 10px;
+    }
+    .search-input {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: 'Cascadia Code', 'Courier New', monospace;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .search-input:focus { border-color: #0066CC; }
+    .btn {
+      padding: 8px 14px;
+      border: none; border-radius: 6px;
+      font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: background 0.15s, opacity 0.15s;
+    }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+    .btn-primary   { background: #0066CC; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #0052a3; }
+    .btn-secondary { background: #e2e8f0; color: #374151; }
+    .btn-secondary:hover:not(:disabled) { background: #cbd5e1; }
+    .btn-full { width: 100%; margin-bottom: 8px; }
+    .btn-ghost {
+      width: 100%; background: none; border: none;
+      color: #94a3b8; font-size: 11px;
+      cursor: pointer; padding: 6px;
+      text-decoration: underline;
+    }
+
+    /* ── STATUS BADGES ── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 20px;
+      font-size: 10px; font-weight: 700;
+    }
+    .badge-dot { width: 5px; height: 5px; border-radius: 50%; }
+    .badge-open    { background: #dcfce7; color: #166534; }
+    .badge-open .badge-dot    { background: #16a34a; }
+    .badge-quoted  { background: #dbeafe; color: #1d4ed8; }
+    .badge-quoted .badge-dot  { background: #2563eb; }
+    .badge-closed  { background: #fee2e2; color: #991b1b; }
+    .badge-closed .badge-dot  { background: #dc2626; }
+    .badge-draft   { background: #fef9c3; color: #854d0e; }
+    .badge-draft .badge-dot   { background: #ca8a04; }
+
+    /* ── INQUIRY CARD ── */
+    .inquiry-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .inquiry-header {
+      display: flex; justify-content: space-between;
+      align-items: center; margin-bottom: 8px;
+    }
+    .inquiry-id {
+      font-family: 'Cascadia Code', 'Courier New', monospace;
+      font-size: 12px; font-weight: 700; color: #0066CC;
+    }
+    .inquiry-field { font-size: 11px; color: #475569; margin-bottom: 3px; }
+    .inquiry-field strong { color: #1e293b; }
+    .inquiry-field .ref-value {
+      font-family: 'Cascadia Code', monospace;
+      color: #1d4ed8; font-size: 11px;
+    }
+
+    /* ── STATES ── */
+    .state-center {
+      text-align: center; padding: 36px 16px;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #e2e8f0;
+      border-top-color: #0066CC;
+      border-radius: 50%;
+      margin: 0 auto 12px;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .state-label { font-size: 13px; font-weight: 600; color: #475569; }
+    .state-sub   { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+
+    .not-found-box {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+    .not-found-icon { font-size: 24px; margin-bottom: 6px; }
+    .not-found-title { font-size: 13px; font-weight: 700; color: #c2410c; }
+    .not-found-ref {
+      font-family: monospace; font-size: 11px;
+      color: #ea580c; margin-top: 2px;
+    }
+
+    .found-header {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 12px;
+    }
+    .found-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+    .found-label { font-size: 12px; font-weight: 700; color: #16a34a; }
+
+    /* ── FOOTER ── */
+    .footer {
+      padding: 8px 14px;
+      border-top: 1px solid #e2e8f0;
+      background: #f8fafc;
+      font-size: 10px; color: #94a3b8; text-align: center;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      display: flex; align-items: center; gap: 8px;
+      margin: 10px 0; color: #94a3b8; font-size: 10px;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; height: 1px; background: #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-logo">BC</div>
+    <div class="header-text">
+      <div class="title">BC Inquiry Checker</div>
+      <div class="sub">Tototheo Maritime</div>
+    </div>
+  </div>
+
+  <!-- LOADING STATE -->
+  <div id="state-loading" class="panel state-center">
+    <div class="spinner"></div>
+    <div class="state-label">Reading email…</div>
+    <div class="state-sub">Scanning for RFQ reference</div>
+  </div>
+
+  <!-- DETECTED STATE -->
+  <div id="state-detected" class="panel" style="display:none">
+    <div class="detected-box">
+      <div class="detected-label">✦ RFQ Reference Detected</div>
+      <div class="detected-ref" id="detected-ref-value">—</div>
+      <div class="detected-source" id="detected-ref-source">from email subject</div>
+    </div>
+    <button class="btn btn-primary btn-full" id="btn-search-detected">
+      🔍 Search Inquiry List
+    </button>
+    <div class="divider">or search manually</div>
+    <div class="search-row">
+      <input class="search-input" id="manual-input" placeholder="Enter Customer Ref…" />
+      <button class="btn btn-secondary" id="btn-search-manual">↵</button>
+    </div>
+  </div>
+
+  <!-- NO-DETECT STATE (no RFQ found in email) -->
+  <div id="state-no-detect" class="panel" style="display:none">
+    <div class="state-center" style="padding-top:20px; padding-bottom:16px">
+      <div style="font-size:20px;margin-bottom:6px">🔍</div>
+      <div class="state-label">No RFQ reference detected</div>
+      <div class="state-sub">Enter the Customer Ref manually</div>
+    </div>
+    <div class="search-row">
+      <input class="search-input" id="manual-input-2" placeholder="e.g. 53700205" />
+      <button class="btn btn-secondary" id="btn-search-manual-2">↵</button>
+    </div>
+    <button class="btn btn-secondary btn-full" id="btn-open-list-direct">
+      Open Inquiry List in BC →
+    </button>
+  </div>
+
+  <!-- SEARCHING STATE -->
+  <div id="state-searching" class="panel state-center" style="display:none">
+    <div class="spinner"></div>
+    <div class="state-label">Searching Business Central…</div>
+    <div class="state-sub" id="searching-ref-display">Customer Ref: —</div>
+  </div>
+
+  <!-- FOUND STATE -->
+  <div id="state-found" class="panel" style="display:none">
+    <div class="found-header">
+      <div class="found-dot"></div>
+      <div class="found-label" id="found-count-label">Inquiry found in BC</div>
+    </div>
+    <div id="results-container"></div>
+    <button class="btn btn-ghost" id="btn-search-again-found">← Search Again</button>
+  </div>
+
+  <!-- NOT FOUND STATE -->
+  <div id="state-notfound" class="panel" style="display:none">
+    <div class="not-found-box">
+      <div class="not-found-icon">⚠️</div>
+      <div class="not-found-title">No Inquiry Found</div>
+      <div class="not-found-ref" id="notfound-ref-display"></div>
+    </div>
+    <button class="btn btn-primary btn-full" id="btn-open-list-notfound">
+      Open Inquiry List (Page 70355879) →
+    </button>
+    <button class="btn btn-ghost" id="btn-search-again-notfound">← Search Again</button>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">Inquiry List · Page 70355879 · Tototheo Maritime Ltd</div>
+
+  <script src="taskpane.js"></script>
+</body>
+</html>

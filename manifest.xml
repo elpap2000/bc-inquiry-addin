@@ -3,11 +3,10 @@
   xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
-  xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
   xsi:type="MailApp">
 
   <Id>c9d8e7f6-a5b4-3210-fedc-ba9876543210</Id>
-  <Version>1.0.1.0</Version>
+  <Version>1.0.2.0</Version>
   <ProviderName>Tototheo Maritime</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
 
@@ -62,9 +61,6 @@
     <Hosts>
       <Host xsi:type="MailHost">
         <DesktopFormFactor>
-
-          <FunctionFile resid="TaskpaneUrl"/>
-
           <ExtensionPoint xsi:type="MessageReadCommandSurface">
             <OfficeTab id="TabDefault">
               <Group id="msgReadGroup">
@@ -88,7 +84,6 @@
               </Group>
             </OfficeTab>
           </ExtensionPoint>
-
         </DesktopFormFactor>
       </Host>
     </Hosts>
@@ -102,8 +97,8 @@
         <bt:Url id="TaskpaneUrl" DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="GroupLabel"    DefaultValue="BC Inquiry"/>
-        <bt:String id="ButtonLabel"   DefaultValue="BC Inquiry Checker"/>
+        <bt:String id="GroupLabel"  DefaultValue="BC Inquiry"/>
+        <bt:String id="ButtonLabel" DefaultValue="BC Inquiry Checker"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="ButtonTooltip" DefaultValue="Detect RFQ from email and search Business Central Inquiry List."/>

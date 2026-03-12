@@ -2,66 +2,59 @@
  * BC Inquiry Checker – Outlook Add-in
  * Tototheo Maritime Ltd
  *
- * Flow:
- *  1. Office.onReady → read email subject + body
- *  2. Extract RFQ reference with regex
- *  3. User clicks Search → query BC OData API
- *  4. Show results with link to open Inquiry List filtered by Customer Ref
- *
  * ─────────────────────────────────────────────────────────────────────────────
- * CONFIGURATION – update these values for your environment
+ * CONFIRMED FIELD NAMES (from Inquiry_List Excel export):
+ *   No.                     → No
+ *   Customer Name           → Customer_Name
+ *   Vessel Name             → Vessel_Name
+ *   Status                  → Status
+ *   Sales Operator          → Sales_Operator
+ *   Category Code           → Category_Code
+ *   Creation Date           → Creation_Date
+ *   Case Code               → Case_Code
+ *
+ * ⚠️  "Customer Ref." field NOT in export → field name to confirm below.
+ *     Open this URL while logged in to M365 and look for the RFQ number field:
+ *     https://api.businesscentral.dynamics.com/v2.0/e5296d4f-699b-43ea-a129-066a3f7010e3/Tototheo/ODataV4/Company('Tototheo%20Maritime%20Ltd')/Inquiry_List?$top=1
  * ─────────────────────────────────────────────────────────────────────────────
  */
 const BC_CONFIG = {
-  // Your BC tenant URL (from the URL you provided)
-  baseUrl: "https://businesscentral.dynamics.com/Tototheo/",
-
-  // Company name (URL-encoded)
-  company: "Tototheo Maritime Ltd",
-
-  // Inquiry List page number
+  baseUrl:        "https://businesscentral.dynamics.com/Tototheo/",
+  company:        "Tototheo Maritime Ltd",
   inquiryListPage: 70355879,
 
-  // OData API endpoint for your Inquiry table
-  // Adjust the entity set name to match your BC setup
-  // Common patterns: "InquiryHeaders", "SalesInquiries", or your custom API name
-  // Example: /api/v2.0/companies(...)/inquiryHeaders
-  // If you have a custom API page, replace below:
-  odataEntity: "InquiryHeaders", // ← CHANGE to your actual OData entity name
+  // ✅ Confirmed OData endpoint
+  odataBase:   "https://api.businesscentral.dynamics.com/v2.0/e5296d4f-699b-43ea-a129-066a3f7010e3/Tototheo/ODataV4",
 
-  // The OData field name for Customer Ref (the field users type the RFQ number into)
-  customerRefField: "customerReference", // ← CHANGE to match your BC field name
+  // ✅ Search uses InquiryCard (has Customer_Ref_No field)
+  // ✅ Open button uses Inquiry_List page (70355879) — confirmed
+  odataEntity: "InquiryCard",
 
-  // Fields to display in results
-  displayFields: ["no", "customerReference", "shipName", "customerName", "status", "assignedTo", "documentDate"],
+  // ✅ CONFIRMED field name (exists in InquiryCard & Inquiry_Card_Excel, NOT in Inquiry_List)
+  customerRefField: "Customer_Ref_No",
+
+  // BC UI filter label
+  bcFilterField: "Customer Ref. No.",
 };
 
 /**
- * Regex patterns to find RFQ numbers in email subject/body.
- * Add more patterns if your customers use different formats.
- * Matches: RFQ 53700205 | RFQ: 53700205 | RFQ#53700205 | Ref: 53700205
+ * RFQ PATTERNS – tuned for your exact email format:
+ * "FW: New RFQ 53700205 from MSC Shipmanagement Ltd – Cyprus for Vessel MSC Richika F"
  */
 const RFQ_PATTERNS = [
-  /\bRFQ[:\s#-]*(\d{5,12})\b/i,
-  /\bRef(?:erence)?[:\s#-]*(\d{5,12})\b/i,
-  /\bRequest\s+for\s+Quotation[:\s#-]*(\d{5,12})\b/i,
-  /\bOrder\s+Ref[:\s#-]*(\d{5,12})\b/i,
+  /\bNew\s+RFQ\s+(\d{5,12})\b/i,              // ← your exact format
+  /\bRFQ[:\s#/-]*(\d{5,12})\b/i,
+  /\bRFQ\s*No\.?\s*[:\s]*(\d{5,12})\b/i,
+  /\bQuotation\s+(?:No\.?\s*)?(\d{5,12})\b/i,
+  /\bRef(?:erence)?\.?\s*[#:\s-]+(\d{5,12})\b/i,
   /\bPO[:\s#-]*(\d{5,12})\b/i,
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STATE MANAGEMENT
+// STATE
 // ─────────────────────────────────────────────────────────────────────────────
 
 let currentRef = "";
-
-function showState(name) {
-  const states = ["loading", "detected", "no-detect", "searching", "found", "notfound"];
-  states.forEach(s => {
-    const el = document.getElementById(`state-${s}`);
-    if (el) el.style.display = (s === name) ? "" : "none";
-  });
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OFFICE.JS INIT
@@ -69,14 +62,10 @@ function showState(name) {
 
 Office.onReady(function (info) {
   if (info.host === Office.HostType.Outlook) {
-    initAddin();
+    attachEventListeners();
+    extractRfqFromEmail();
   }
 });
-
-function initAddin() {
-  attachEventListeners();
-  extractRfqFromEmail();
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EXTRACT RFQ FROM EMAIL
@@ -84,48 +73,59 @@ function initAddin() {
 
 function extractRfqFromEmail() {
   showState("loading");
-
-  const item = Office.context.mailbox.item;
-
-  // 1. Check subject first (fastest)
+  const item    = Office.context.mailbox.item;
   const subject = item.subject || "";
-  const fromSubject = findRfqInText(subject);
 
+  // 1. Try subject first (instant, no async)
+  const fromSubject = findRfqInText(subject);
   if (fromSubject) {
-    setDetectedState(fromSubject, "from email subject");
+    setDetectedState(fromSubject, "detected from subject");
     return;
   }
 
-  // 2. Check body (async)
+  // 2. Try body
   item.body.getAsync(Office.CoercionType.Text, function (result) {
     if (result.status === Office.AsyncResultStatus.Succeeded) {
-      const bodyText = result.value || "";
-      const fromBody = findRfqInText(bodyText);
+      const fromBody = findRfqInText(result.value || "");
       if (fromBody) {
-        setDetectedState(fromBody, "from email body");
+        setDetectedState(fromBody, "detected from email body");
       } else {
         showState("no-detect");
       }
     } else {
-      // Body read failed – show manual input
       showState("no-detect");
     }
   });
 }
 
 function findRfqInText(text) {
-  for (const pattern of RFQ_PATTERNS) {
-    const match = text.match(pattern);
-    if (match) return match[1];
+  for (const p of RFQ_PATTERNS) {
+    const m = text.match(p);
+    if (m && m[1]) return m[1];
   }
   return null;
 }
 
 function setDetectedState(ref, source) {
   currentRef = ref;
-  document.getElementById("detected-ref-value").textContent = ref;
+  document.getElementById("detected-ref-value").textContent  = ref;
   document.getElementById("detected-ref-source").textContent = source;
   showState("detected");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI STATE
+// ─────────────────────────────────────────────────────────────────────────────
+
+function showState(name) {
+  ["loading","detected","no-detect","searching","found","notfound"].forEach(function(s) {
+    const el = document.getElementById("state-" + s);
+    if (el) el.style.display = (s === name) ? "" : "none";
+  });
+}
+
+function resetToSearch() {
+  currentRef ? showState("detected") : showState("no-detect");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -133,203 +133,162 @@ function setDetectedState(ref, source) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function attachEventListeners() {
-  // Detected state: search with detected ref
-  document.getElementById("btn-search-detected").addEventListener("click", function () {
-    searchInquiry(currentRef);
-  });
-
-  // Detected state: manual override
-  document.getElementById("btn-search-manual").addEventListener("click", function () {
-    const val = document.getElementById("manual-input").value.trim();
-    if (val) searchInquiry(val);
-  });
-  document.getElementById("manual-input").addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
-      const val = this.value.trim();
-      if (val) searchInquiry(val);
-    }
-  });
-
-  // No-detect state: manual search
-  document.getElementById("btn-search-manual-2").addEventListener("click", function () {
-    const val = document.getElementById("manual-input-2").value.trim();
-    if (val) searchInquiry(val);
-  });
-  document.getElementById("manual-input-2").addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
-      const val = this.value.trim();
-      if (val) searchInquiry(val);
-    }
-  });
-
-  // No-detect: open list directly
-  document.getElementById("btn-open-list-direct").addEventListener("click", function () {
-    openInquiryList(null);
-  });
-
-  // Not found: open list
-  document.getElementById("btn-open-list-notfound").addEventListener("click", function () {
-    openInquiryList(currentRef);
-  });
-
-  // Search again buttons
-  document.getElementById("btn-search-again-found").addEventListener("click", resetToSearch);
-  document.getElementById("btn-search-again-notfound").addEventListener("click", resetToSearch);
+  on("btn-search-detected",      "click", function() { searchInquiry(currentRef); });
+  on("btn-search-manual",        "click", function() { const v=val("manual-input");       if(v) searchInquiry(v); });
+  on("btn-search-manual-2",      "click", function() { const v=val("manual-input-2");     if(v) searchInquiry(v); });
+  on("btn-open-list-direct",     "click", function() { openInquiryList(null); });
+  on("btn-open-list-notfound",   "click", function() { openInquiryList(currentRef); });
+  on("btn-search-again-found",   "click", resetToSearch);
+  on("btn-search-again-notfound","click", resetToSearch);
+  onEnter("manual-input",   function(v) { searchInquiry(v); });
+  onEnter("manual-input-2", function(v) { searchInquiry(v); });
 }
 
-function resetToSearch() {
-  if (currentRef) {
-    showState("detected");
-  } else {
-    showState("no-detect");
-  }
-}
+function on(id, ev, fn)  { const el=document.getElementById(id); if(el) el.addEventListener(ev,fn); }
+function val(id)         { const el=document.getElementById(id); return el ? el.value.trim() : ""; }
+function onEnter(id, fn) { on(id,"keydown",function(e){ if(e.key==="Enter"){ const v=val(id); if(v) fn(v); }}); }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SEARCH BUSINESS CENTRAL via OData
+// SEARCH BC OData
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function searchInquiry(ref) {
   currentRef = ref;
-  document.getElementById("searching-ref-display").textContent = `Customer Ref: ${ref}`;
+  document.getElementById("searching-ref-display").textContent = "Customer Ref: " + ref;
   showState("searching");
-
   try {
     const results = await queryBCOData(ref);
-
-    if (results && results.length > 0) {
-      renderFoundState(results, ref);
-    } else {
-      renderNotFoundState(ref);
-    }
-  } catch (err) {
+    results && results.length > 0
+      ? renderFoundState(results, ref)
+      : renderNotFoundState(ref, false);
+  } catch(err) {
     console.error("BC OData error:", err);
-    // On error, fall back to opening BC directly
     renderNotFoundState(ref, true);
   }
 }
 
 /**
- * Query Business Central OData API
+ * Query:
+ * GET /ODataV4/Company('Tototheo Maritime Ltd')/Inquiry_List
+ *     ?$filter=Customer_Ref_No eq '53700205'
+ *     &$top=10
+ *     &$select=No,Customer_Ref_No,Customer_Name,Vessel_Name,Status,Sales_Operator,Category_Code,Creation_Date
  *
- * Uses the standard BC OData v4 endpoint.
- * Authentication is handled automatically via the user's existing
- * Microsoft 365 / Entra ID session (same account as Outlook).
- *
- * OData URL format:
- * /ODataV4/Company('Tototheo Maritime Ltd')/InquiryHeaders?$filter=customerReference eq '53700205'
- *
- * NOTE: If your Inquiry table is a custom page published as API,
- * the URL pattern will be different – update BC_CONFIG.odataEntity accordingly.
+ * Auth: reuses the user's existing M365 browser session — no extra login.
  */
 async function queryBCOData(ref) {
-  const companyEncoded = encodeURIComponent(BC_CONFIG.company);
-  const refEncoded = ref.replace(/'/g, "''"); // OData single-quote escaping
+  const co   = encodeURIComponent(BC_CONFIG.company);
+  const ref2 = ref.replace(/'/g, "''");   // OData escape
+  const f    = BC_CONFIG.customerRefField;
 
-  // Try OData v4 endpoint first
-  const odataUrl = `https://api.businesscentral.dynamics.com/v2.0/Tototheo/sandbox/ODataV4/Company('${companyEncoded}')/${BC_CONFIG.odataEntity}?$filter=${BC_CONFIG.customerRefField} eq '${refEncoded}'&$top=10`;
+  // Fields from InquiryCard entity
+  const select = [
+    "No", f,
+    "Customer_Name",
+    "Vessel_Name",
+    "Status",
+    "Sales_Operator",
+    "Category_Code",
+    "Creation_Date",
+  ].join(",");
 
-  const response = await fetch(odataUrl, {
-    method: "GET",
-    headers: {
-      "Accept": "application/json",
-      // Auth handled automatically by the browser session / MSAL
-    },
-    credentials: "include",
+  const url = BC_CONFIG.odataBase
+    + "/Company('" + co + "')/" + BC_CONFIG.odataEntity
+    + "?$filter=" + encodeURIComponent(f + " eq '" + ref2 + "'")
+    + "&$top=10"
+    + "&$select=" + select;
+
+  const resp = await fetch(url, {
+    method:      "GET",
+    headers:     { "Accept": "application/json" },
+    credentials: "include",   // uses existing M365 session
   });
 
-  if (!response.ok) {
-    // If OData fails (e.g. 401, 404), throw so we fall back to manual open
-    throw new Error(`OData error: ${response.status} ${response.statusText}`);
-  }
-
-  const data = await response.json();
+  if (!resp.ok) throw new Error("HTTP " + resp.status);
+  const data = await resp.json();
   return data.value || [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RENDER STATES
+// RENDER
 // ─────────────────────────────────────────────────────────────────────────────
 
 function renderFoundState(results, ref) {
   const container = document.getElementById("results-container");
   container.innerHTML = "";
+  document.getElementById("found-count-label").textContent =
+    results.length === 1 ? "1 Inquiry found in BC" : results.length + " Inquiries found in BC";
 
-  const countLabel = document.getElementById("found-count-label");
-  countLabel.textContent = results.length === 1
-    ? "1 Inquiry found in BC"
-    : `${results.length} Inquiries found in BC`;
+  results.forEach(function(item) {
+    const no       = item.No || "—";
+    const custRef  = item[BC_CONFIG.customerRefField] || ref;
+    const customer = item.Customer_Name  || "";
+    const vessel   = item.Vessel_Name    || "";
+    const status   = item.Status         || "";
+    const operator = item.Sales_Operator || "";
+    const category = item.Category_Code  || "";
+    const date     = item.Creation_Date  ? item.Creation_Date.substring(0,10) : "";
 
-  results.forEach(function (item) {
-    const statusClass = getStatusClass(item.status || item.Status || "");
     const card = document.createElement("div");
     card.className = "inquiry-card";
-    card.innerHTML = `
-      <div class="inquiry-header">
-        <div class="inquiry-id">${escHtml(item.no || item.No || "—")}</div>
-        <span class="badge ${statusClass}">
-          <span class="badge-dot"></span>
-          ${escHtml(item.status || item.Status || "—")}
-        </span>
-      </div>
-      <div class="inquiry-field"><strong>Customer Ref:</strong> <span class="ref-value">${escHtml(item.customerReference || item[BC_CONFIG.customerRefField] || ref)}</span></div>
-      ${item.shipName || item.ShipName ? `<div class="inquiry-field"><strong>Vessel:</strong> ${escHtml(item.shipName || item.ShipName)}</div>` : ""}
-      ${item.customerName || item.CustomerName ? `<div class="inquiry-field"><strong>Customer:</strong> ${escHtml(item.customerName || item.CustomerName)}</div>` : ""}
-      ${item.assignedTo || item.AssignedTo ? `<div class="inquiry-field"><strong>Assignee:</strong> ${escHtml(item.assignedTo || item.AssignedTo)}</div>` : ""}
-      <button
-        class="btn btn-primary"
-        style="width:100%;margin-top:10px;font-size:11px;padding:7px"
-        onclick="openInquiryListItem('${escHtml(item.no || item.No || "")}', '${escHtml(ref)}')"
-      >
-        Open in Inquiry List →
-      </button>
-    `;
+    card.innerHTML =
+      '<div class="inquiry-header">'
+        + '<div class="inquiry-id">' + esc(no) + '</div>'
+        + '<span class="badge ' + getStatusClass(status) + '">'
+          + '<span class="badge-dot"></span>' + esc(status || "—")
+        + '</span>'
+      + '</div>'
+      + row("Ref",      custRef,  true)
+      + row("Customer", customer)
+      + row("Vessel",   vessel)
+      + row("Operator", operator)
+      + row("Category", category)
+      + row("Date",     date)
+      + '<button class="btn btn-primary"'
+        + ' style="width:100%;margin-top:10px;font-size:11px;padding:7px"'
+        + ' onclick="openInquiryList(\'' + esc(ref) + '\')">'
+        + 'Open in Inquiry List →'
+      + '</button>';
+
     container.appendChild(card);
   });
 
   showState("found");
 }
 
+function row(label, value, mono) {
+  if (!value) return "";
+  return '<div class="inquiry-field"><strong>' + label + ':</strong> '
+    + (mono ? '<span class="ref-value">' : '')
+    + esc(value)
+    + (mono ? '</span>' : '')
+    + '</div>';
+}
+
 function renderNotFoundState(ref, isError) {
   document.getElementById("notfound-ref-display").textContent = isError
-    ? `Ref: ${ref} (could not reach BC – open manually)`
-    : `Ref: ${ref} — not found`;
+    ? ref + " — could not reach BC. Open manually."
+    : "No Inquiry found for Ref: " + ref;
   showState("notfound");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OPEN BUSINESS CENTRAL PAGES
+// OPEN BC
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Opens the Inquiry List page in BC, filtered by Customer Ref.
- * Uses the exact URL pattern from the link you provided.
+ * Opens BC Inquiry List filtered by Customer Ref.
+ * URL format confirmed from your BC link:
+ * https://businesscentral.dynamics.com/Tototheo/?company=Tototheo%20Maritime%20Ltd&page=70355879
  */
 function openInquiryList(ref) {
-  const companyParam = encodeURIComponent(BC_CONFIG.company);
-  let url = `${BC_CONFIG.baseUrl}?company=${companyParam}&page=${BC_CONFIG.inquiryListPage}`;
-
-  // If we have a ref, add a filter – BC supports URL filter params
-  if (ref) {
-    // BC filter syntax: &filter=CustomerReference IS '53700205'
-    // OR use the bookmark from the BC URL directly
-    url += `&filter=${encodeURIComponent(BC_CONFIG.customerRefField + " IS '" + ref + "'")}`;
-  }
-
-  Office.context.ui.openBrowserWindow(url);
-}
-
-/**
- * Opens the Inquiry List filtered to show a specific inquiry by No.
- */
-function openInquiryListItem(no, ref) {
-  const companyParam = encodeURIComponent(BC_CONFIG.company);
-  let url = `${BC_CONFIG.baseUrl}?company=${companyParam}&page=${BC_CONFIG.inquiryListPage}`;
+  let url = BC_CONFIG.baseUrl
+    + "?company=" + encodeURIComponent(BC_CONFIG.company)
+    + "&page="    + BC_CONFIG.inquiryListPage;
 
   if (ref) {
-    url += `&filter=${encodeURIComponent(BC_CONFIG.customerRefField + " IS '" + ref + "'")}`;
+    url += "&filter=" + encodeURIComponent("'" + BC_CONFIG.bcFilterField + "' IS '" + ref + "'");
   }
-
   Office.context.ui.openBrowserWindow(url);
 }
 
@@ -339,17 +298,15 @@ function openInquiryListItem(no, ref) {
 
 function getStatusClass(status) {
   const s = (status || "").toLowerCase();
-  if (s.includes("open"))   return "badge-open";
-  if (s.includes("quot"))   return "badge-quoted";
-  if (s.includes("clos"))   return "badge-closed";
+  if (s.includes("receiv") || s.includes("open"))  return "badge-open";
+  if (s.includes("quot"))                          return "badge-quoted";
+  if (s.includes("clos") || s.includes("cancel"))  return "badge-closed";
   return "badge-draft";
 }
 
-function escHtml(str) {
+function esc(str) {
   return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
 }

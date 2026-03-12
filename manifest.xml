@@ -24,13 +24,13 @@
   <Description DefaultValue="Search and open Business Central Inquiry List from any email. Detects RFQ references automatically."/>
 
   <!-- Icons - replace URLs with your hosted icon files -->
-  <IconUrl DefaultValue="https://YOUR-HOSTED-URL/assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://YOUR-HOSTED-URL/assets/icon-80.png"/>
+  <IconUrl DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/assets/icon-80.png"/>
   <SupportUrl DefaultValue="https://businesscentral.dynamics.com/Tototheo/"/>
 
   <AppDomains>
     <AppDomain>https://businesscentral.dynamics.com</AppDomain>
-    <AppDomain>https://YOUR-HOSTED-URL</AppDomain>
+    <AppDomain>https://elpap2000.github.io/bc-inquiry-addin</AppDomain>
   </AppDomains>
 
   <Hosts>
@@ -47,7 +47,7 @@
   <FormSettings>
     <Form xsi:type="ItemRead">
       <DesktopSettings>
-        <SourceLocation DefaultValue="https://YOUR-HOSTED-URL/taskpane.html"/>
+        <SourceLocation DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/taskpane.html"/>
         <RequestedHeight>450</RequestedHeight>
       </DesktopSettings>
     </Form>
@@ -106,12 +106,12 @@
     <Resources>
       <bt:Images>
         <!-- Replace with your actual hosted icon URLs -->
-        <bt:Image id="Icon.16x16" DefaultValue="https://YOUR-HOSTED-URL/assets/icon-16.png"/>
-        <bt:Image id="Icon.32x32" DefaultValue="https://YOUR-HOSTED-URL/assets/icon-32.png"/>
-        <bt:Image id="Icon.80x80" DefaultValue="https://YOUR-HOSTED-URL/assets/icon-80.png"/>
+        <bt:Image id="Icon.16x16" DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="Taskpane.Url" DefaultValue="https://YOUR-HOSTED-URL/taskpane.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GroupLabel" DefaultValue="Business Central"/>

@@ -24,8 +24,8 @@
   <Description DefaultValue="Search and open Business Central Inquiry List from any email. Detects RFQ references automatically."/>
 
   <!-- Icons - replace URLs with your hosted icon files -->
-  <IconUrl DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/assets/icon-80.png"/>
+  <IconUrl DefaultValue="https://raw.githubusercontent.com/OfficeDev/Office-Add-in-samples/main/Assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://raw.githubusercontent.com/OfficeDev/Office-Add-in-samples/main/Assets/icon-80.png"/>
   <SupportUrl DefaultValue="https://businesscentral.dynamics.com/Tototheo/"/>
 
   <AppDomains>
@@ -106,9 +106,9 @@
     <Resources>
       <bt:Images>
         <!-- Replace with your actual hosted icon URLs -->
-        <bt:Image id="Icon.16x16" DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/assets/icon-16.png"/>
-        <bt:Image id="Icon.32x32" DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/assets/icon-32.png"/>
-        <bt:Image id="Icon.80x80" DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/assets/icon-80.png"/>
+        <bt:Image id="Icon.16x16" DefaultValue="https://raw.githubusercontent.com/OfficeDev/Office-Add-in-samples/main/Assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://raw.githubusercontent.com/OfficeDev/Office-Add-in-samples/main/Assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://raw.githubusercontent.com/OfficeDev/Office-Add-in-samples/main/Assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
         <bt:Url id="Taskpane.Url" DefaultValue="https://elpap2000.github.io/bc-inquiry-addin/taskpane.html"/>

@@ -81,17 +81,17 @@ function resetToSearch() {
 // -----------------------------
 function attachEventListeners() {
   on("btn-search-detected", "click", function () {
-    searchInquiry(currentRef);
+    openInquiryList(currentRef);
   });
 
   on("btn-search-manual", "click", function () {
     const v = val("manual-input");
-    if (v) searchInquiry(v);
+    if (v) openInquiryList(v);
   });
 
   on("btn-search-manual-2", "click", function () {
     const v = val("manual-input-2");
-    if (v) searchInquiry(v);
+    if (v) openInquiryList(v);
   });
 
   on("btn-open-list-direct", "click", function () {

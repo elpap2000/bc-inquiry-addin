@@ -22,6 +22,7 @@
     <AppDomain>https://businesscentral.dynamics.com</AppDomain>
     <AppDomain>https://api.businesscentral.dynamics.com</AppDomain>
     <AppDomain>https://appsforoffice.microsoft.com</AppDomain>
+    <AppDomain>https://login.microsoftonline.com</AppDomain>
   </AppDomains>
 
   <Hosts>

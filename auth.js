@@ -1,29 +1,89 @@
 (function () {
-  const cfg = window.ADDIN_CONFIG;
+  const cfg = window.ADDIN_CONFIG || {};
 
-  const msalConfig = {
-    auth: {
-      clientId: cfg.clientId,
-      authority: "https://login.microsoftonline.com/" + cfg.tenantId,
-      redirectUri: window.location.origin + window.location.pathname
-    },
-    cache: {
-      cacheLocation: "localStorage",
-      storeAuthStateInCookie: true
+  function isPlaceholder(v) {
+    return !v || /PASTE-|YOUR-/i.test(v);
+  }
+
+  function normalizeError(err) {
+    if (!err) return "Unknown authentication error.";
+    if (typeof err === "string") return err;
+    return err.message || err.errorMessage || JSON.stringify(err);
+  }
+
+  function showError(err) {
+    const el = document.getElementById("error");
+    if (el) {
+      el.style.display = "";
+      el.textContent = normalizeError(err);
     }
-  };
+  }
 
-  const tokenRequest = {
-    scopes: [cfg.bcScope]
-  };
-
-  let msalInstance;
+  function sendParent(payload) {
+    Office.context.ui.messageParent(JSON.stringify(payload));
+  }
 
   Office.onReady(async function () {
     try {
-      msalInstance = new msal.PublicClientApplication(msalConfig);
+      if (isPlaceholder(cfg.tenantId) || isPlaceholder(cfg.clientId)) {
+        throw new Error(
+          "Add-in not configured. Update app-config.js with real tenantId and clientId."
+        );
+      }
+
+      const msalConfig = {
+        auth: {
+          clientId: cfg.clientId,
+          authority: "https://login.microsoftonline.com/" + cfg.tenantId,
+          redirectUri: cfg.redirectUri || (window.location.origin + window.location.pathname)
+        },
+        cache: {
+          cacheLocation: "localStorage",
+          storeAuthStateInCookie: true
+        }
+      };
+
+      const tokenRequest = {
+        scopes: [cfg.bcScope]
+      };
+
+      const msalInstance = new msal.PublicClientApplication(msalConfig);
       await msalInstance.initialize();
-      await authenticate();
+
+      const redirectResult = await msalInstance.handleRedirectPromise();
+      if (redirectResult && redirectResult.accessToken) {
+        sendParent({
+          type: "auth-success",
+          accessToken: redirectResult.accessToken,
+          expiresOn: redirectResult.expiresOn ? redirectResult.expiresOn.toISOString() : null
+        });
+        return;
+      }
+
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts.length > 0) {
+        try {
+          const silentResult = await msalInstance.acquireTokenSilent({
+            ...tokenRequest,
+            account: accounts[0]
+          });
+
+          sendParent({
+            type: "auth-success",
+            accessToken: silentResult.accessToken,
+            expiresOn: silentResult.expiresOn ? silentResult.expiresOn.toISOString() : null
+          });
+          return;
+        } catch (_) {
+          // continue to interactive
+        }
+      }
+
+      await msalInstance.acquireTokenRedirect({
+        ...tokenRequest,
+        loginHint:
+          Office.context?.mailbox?.userProfile?.emailAddress || undefined
+      });
     } catch (err) {
       showError(err);
       sendParent({
@@ -32,53 +92,4 @@
       });
     }
   });
-
-  async function authenticate() {
-    // 1) Return from redirect flow
-    const redirectResult = await msalInstance.handleRedirectPromise();
-    if (redirectResult && redirectResult.accessToken) {
-      return sendSuccess(redirectResult);
-    }
-
-    // 2) Try silent token if an account already exists
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length > 0) {
-      try {
-        const silentResult = await msalInstance.acquireTokenSilent({
-          ...tokenRequest,
-          account: accounts[0]
-        });
-        return sendSuccess(silentResult);
-      } catch (e) {
-        // Silent failed -> continue interactive
-      }
-    }
-
-    // 3) Interactive sign-in/token
-    await msalInstance.acquireTokenRedirect(tokenRequest);
-  }
-
-  function sendSuccess(result) {
-    sendParent({
-      type: "auth-success",
-      accessToken: result.accessToken,
-      expiresOn: result.expiresOn ? result.expiresOn.toISOString() : null
-    });
-  }
-
-  function sendParent(payload) {
-    Office.context.ui.messageParent(JSON.stringify(payload));
-  }
-
-  function showError(err) {
-    const el = document.getElementById("error");
-    el.style.display = "";
-    el.textContent = normalizeError(err);
-  }
-
-  function normalizeError(err) {
-    if (!err) return "Unknown authentication error.";
-    if (typeof err === "string") return err;
-    return err.message || err.errorMessage || JSON.stringify(err);
-  }
 })();

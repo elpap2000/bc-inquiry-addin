@@ -1,9 +1,8 @@
 window.ADDIN_CONFIG = {
-  tenantId: "PASTE-YOUR-ENTRA-TENANT-ID",
-  clientId: "PASTE-YOUR-APP-CLIENT-ID",
+  tenantId: "YOUR-REAL-TENANT-ID",
+  clientId: "YOUR-REAL-CLIENT-ID",
+  redirectUri: "https://elpap2000.github.io/bc-inquiry-addin/auth.html",
 
-  // Business Central Online delegated scope
-  // Keep this unless your IT confirms a different BC resource URI in your tenant.
   bcScope: "https://api.businesscentral.dynamics.com/user_impersonation",
 
   baseUrl: "https://businesscentral.dynamics.com/Tototheo/",

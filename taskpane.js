@@ -34,7 +34,7 @@ const BC_CONFIG = {
   customerRefField: "Customer_Ref_No",
 
   // BC UI filter label
-  bcFilterField: "Customer Ref. No.",
+  bcFilterField: "Customer Ref. No",
 };
 
 /**

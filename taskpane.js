@@ -66,9 +66,14 @@ function setDetectedState(ref, source) {
 // UI state
 // -----------------------------
 function showState(name) {
-  ["loading", "detected", "no-detect", "searching", "found", "notfound"].forEach(function (s) {
+  ["loading", "detected", "no-detect"].forEach(function (s) {
     const el = document.getElementById("state-" + s);
     if (el) el.style.display = (s === name) ? "" : "none";
+  });
+  
+  ["searching", "found", "notfound"].forEach(function (s) {
+    const el = document.getElementById("state-" + s);
+    if (el) el.style.display = "none";
   });
 }
 
@@ -106,11 +111,11 @@ function attachEventListeners() {
   on("btn-search-again-notfound", "click", resetToSearch);
 
   onEnter("manual-input", function (v) {
-    searchInquiry(v);
+    openInquiryList(v);
   });
 
   onEnter("manual-input-2", function (v) {
-    searchInquiry(v);
+    openInquiryList(v);
   });
 }
 

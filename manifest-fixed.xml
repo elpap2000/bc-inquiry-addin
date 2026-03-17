@@ -6,7 +6,7 @@
   xsi:type="MailApp">
 
   <Id>c9d8e7f6-a5b4-3210-fedc-ba9876543210</Id>
-  <Version>1.0.3.0</Version>
+  <Version>1.0.4.0</Version>
   <ProviderName>Tototheo Maritime</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
 
@@ -23,6 +23,7 @@
     <AppDomain>https://api.businesscentral.dynamics.com</AppDomain>
     <AppDomain>https://appsforoffice.microsoft.com</AppDomain>
     <AppDomain>https://login.microsoftonline.com</AppDomain>
+    <AppDomain>https://alcdn.msauth.net</AppDomain>
   </AppDomains>
 
   <Hosts>
